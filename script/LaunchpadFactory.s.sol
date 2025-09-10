@@ -6,7 +6,8 @@ import "../src/LaunchpadFactory.sol";
 import "../src/Launchpad.sol";
 
 contract LaunchpadDeployerScript is Script {
-    address constant UNISWAP_ROUTER_ADDRESS = 0xE3b0AEA5df8225cF404894306E8a26d7Cb9118F8;
+    address constant UNISWAP_ROUTER_ADDRESS =
+        0xD99D1c33F9fC3444f8101754aBC46c52416550D1;
 
     function run() external {
         uint256 privateKey = vm.envUint("PRIVATE_KEY_1");
@@ -14,7 +15,10 @@ contract LaunchpadDeployerScript is Script {
         vm.startBroadcast(privateKey);
 
         Launchpad launchpad = new Launchpad();
-        LaunchpadFactory factory = new LaunchpadFactory(address(launchpad), UNISWAP_ROUTER_ADDRESS);
+        LaunchpadFactory factory = new LaunchpadFactory(
+            address(launchpad),
+            UNISWAP_ROUTER_ADDRESS
+        );
 
         console.log("LaunchpadFactory deployed at:", address(factory));
 

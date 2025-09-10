@@ -11,6 +11,12 @@ elif [ "$1" = "sepolia" ]; then
 elif [ "$1" = "mainnet" ]; then
   NETWORK=$MAINNET_API
   CHAIN_ID=1
+elif [ "$1" = "bsc-testnet" ]; then
+  NETWORK=$BSC_TESTNET_API
+  CHAIN_ID=97
+elif [ "$1" = "bsc" ]; then
+  NETWORK=$BSC_API
+  CHAIN_ID=56
 else
   echo "Usage: ./deploy.sh [network]"
   exit 1
