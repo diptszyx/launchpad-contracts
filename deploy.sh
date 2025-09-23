@@ -22,7 +22,7 @@ else
   exit 1
 fi
 
-forge script script/LaunchpadFactory.s.sol:LaunchpadDeployerScript \
+forge script script/LaunchpadFactory.s.sol:LaunchpadFactoryScript \
   --rpc-url $NETWORK \
   --broadcast \
   --verify \
