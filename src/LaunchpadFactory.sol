@@ -217,9 +217,22 @@ contract LaunchpadFactory is
             address tokenAddr = allTokens[i];
             TokenData storage data = tokenData[tokenAddr];
 
-            uint256 currentPrice = data.ethSupply > 0
-                ? BondingCurve.calculatePurchaseReturn(data.ethSupply, 1 ether)
-                : BondingCurve.calculatePurchaseReturn(0, 1 ether);
+            uint256 currentPrice;
+            if (data.isMigrated) {
+                currentPrice = 0;
+            } else if (data.ethSupply > 0) {
+                uint256 tokensFor1Eth = BondingCurve.calculatePurchaseReturn(
+                    data.ethSupply,
+                    1 ether
+                );
+                currentPrice = tokensFor1Eth > 0 ? 1 ether / tokensFor1Eth : 0;
+            } else {
+                uint256 tokensFor1Eth = BondingCurve.calculatePurchaseReturn(
+                    0,
+                    1 ether
+                );
+                currentPrice = tokensFor1Eth > 0 ? 1 ether / tokensFor1Eth : 0;
+            }
 
             prices[i] = TokenPrice({
                 tokenAddress: tokenAddr,
@@ -231,6 +244,28 @@ contract LaunchpadFactory is
         }
 
         return prices;
+    }
+
+    function getTokenPrice(
+        address tokenAddress
+    ) external view returns (uint256 price) {
+        TokenData storage data = tokenData[tokenAddress];
+
+        if (data.isMigrated) {
+            return 0;
+        } else if (data.ethSupply > 0) {
+            uint256 tokensFor1Eth = BondingCurve.calculatePurchaseReturn(
+                data.ethSupply,
+                1 ether
+            );
+            price = tokensFor1Eth > 0 ? 1 ether / tokensFor1Eth : 0;
+        } else {
+            uint256 tokensFor1Eth = BondingCurve.calculatePurchaseReturn(
+                0,
+                1 ether
+            );
+            price = tokensFor1Eth > 0 ? 1 ether / tokensFor1Eth : 0;
+        }
     }
 
     function getEthersOutAtCurrentSupply(

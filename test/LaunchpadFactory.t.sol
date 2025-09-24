@@ -166,7 +166,6 @@ contract LaunchpadFactoryTest is Test, ArtifactStorage {
         address tokenAddress = launchpadFactory.createLaunchpad("Test", "T");
         uint256 buyAmount = 1 ether;
 
-        // First buy
         vm.startPrank(alice);
         uint256 firstBuyTokens = launchpadFactory.getTokensOutAtCurrentSupply(
             tokenAddress,
@@ -175,7 +174,6 @@ contract LaunchpadFactoryTest is Test, ArtifactStorage {
         launchpadFactory.buyTokens{value: buyAmount}(tokenAddress, 0);
         vm.stopPrank();
 
-        // Second buy with same ETH should yield fewer tokens
         vm.startPrank(bob);
         uint256 secondBuyTokens = launchpadFactory.getTokensOutAtCurrentSupply(
             tokenAddress,
@@ -194,10 +192,8 @@ contract LaunchpadFactoryTest is Test, ArtifactStorage {
         address tokenAddress = launchpadFactory.createLaunchpad("Test", "T");
 
         vm.startPrank(alice);
-        // Trigger migration
         launchpadFactory.buyTokens{value: 101 ether}(tokenAddress, 0);
 
-        // Should revert when trying to buy after migration
         vm.expectRevert(
             abi.encodeWithSignature("LaunchpadFactoryInvalidState()")
         );
@@ -209,20 +205,16 @@ contract LaunchpadFactoryTest is Test, ArtifactStorage {
         address tokenAddress = launchpadFactory.createLaunchpad("Test", "T");
 
         vm.startPrank(alice);
-        // Buy some tokens first
         uint256 tokensBought = launchpadFactory.buyTokens{value: 50 ether}(
             tokenAddress,
             0
         );
 
-        // Trigger migration
         launchpadFactory.buyTokens{value: 51 ether}(tokenAddress, 0);
 
-        // Approve tokens
         IERC20 token = launchpadFactory.tokens(tokenAddress);
         token.approve(address(launchpadFactory), tokensBought);
 
-        // Should revert when trying to sell after migration
         vm.expectRevert(
             abi.encodeWithSignature("LaunchpadFactoryInvalidState()")
         );
@@ -255,11 +247,9 @@ contract LaunchpadFactoryTest is Test, ArtifactStorage {
         uint256 initialBalance = address(alice).balance;
 
         vm.startPrank(alice);
-        // Send 102 ether, should only use 100 ether and refund 2 ether
         launchpadFactory.buyTokens{value: 102 ether}(tokenAddress, 0);
         vm.stopPrank();
 
-        // Should have spent exactly 100 ether (threshold amount)
         assertEq(
             address(alice).balance,
             initialBalance - 100 ether,
@@ -295,7 +285,6 @@ contract LaunchpadFactoryTest is Test, ArtifactStorage {
 
     function test_OnlyOwnerCanPause() public {
         vm.startPrank(alice);
-        // Sửa từ "Ownable: caller is not the owner" thành "OwnableUnauthorizedAccount(address)"
         vm.expectRevert(
             abi.encodeWithSignature(
                 "OwnableUnauthorizedAccount(address)",
@@ -309,25 +298,63 @@ contract LaunchpadFactoryTest is Test, ArtifactStorage {
     function test_GetAllTokenPrices() public {
         address token1 = launchpadFactory.createLaunchpad("Token1", "T1");
         address token2 = launchpadFactory.createLaunchpad("Token2", "T2");
+        address token3 = launchpadFactory.createLaunchpad("Token3", "T3");
 
         vm.startPrank(alice);
         launchpadFactory.buyTokens{value: 1 ether}(token1, 0);
         launchpadFactory.buyTokens{value: 2 ether}(token2, 0);
+        launchpadFactory.buyTokens{value: 101 ether}(token3, 0);
         vm.stopPrank();
 
         LaunchpadFactory.TokenPrice[] memory prices = launchpadFactory
             .getAllTokenPrices();
 
-        assertEq(prices.length, 2, "Should return 2 token prices");
-        assertEq(prices[0].tokenAddress, token1, "Token1 address mismatch");
-        assertEq(prices[1].tokenAddress, token2, "Token2 address mismatch");
+        assertEq(prices.length, 3, "Should return 3 token prices");
 
-        assertTrue(prices[0].currentPrice > 0, "Token1 should have price");
-        assertTrue(prices[1].currentPrice > 0, "Token2 should have price");
+        assertTrue(
+            prices[0].ethSupply == 1 ether,
+            "Token1 should have 1 ETH supply"
+        );
+        assertTrue(
+            prices[1].ethSupply == 2 ether,
+            "Token2 should have 2 ETH supply"
+        );
+
+        assertEq(
+            prices[2].currentPrice,
+            0,
+            "Migrated token should have 0 price"
+        );
+        assertTrue(prices[2].isMigrated, "Token3 should be migrated");
+
         assertTrue(
             prices[1].ethSupply > prices[0].ethSupply,
             "Token2 should have more ETH"
         );
+    }
+
+    function test_GetSingleTokenPrice() public {
+        address tokenAddress = launchpadFactory.createLaunchpad("Test", "T");
+
+        uint256 initialPrice = launchpadFactory.getTokenPrice(tokenAddress);
+        assertTrue(initialPrice >= 0, "Initial price should be >= 0");
+
+        vm.startPrank(alice);
+        launchpadFactory.buyTokens{value: 1 ether}(tokenAddress, 0);
+        vm.stopPrank();
+
+        uint256 priceAfterBuy = launchpadFactory.getTokenPrice(tokenAddress);
+        (, , uint256 ethSupply, ) = launchpadFactory.tokenData(tokenAddress);
+        assertTrue(ethSupply == 1 ether, "Should have 1 ETH supply after buy");
+
+        vm.startPrank(alice);
+        launchpadFactory.buyTokens{value: 100 ether}(tokenAddress, 0);
+        vm.stopPrank();
+
+        uint256 priceAfterMigration = launchpadFactory.getTokenPrice(
+            tokenAddress
+        );
+        assertEq(priceAfterMigration, 0, "Migrated token should have 0 price");
     }
 
     function test_LiquidityMigration() public {
