@@ -8,7 +8,6 @@ import {SafeERC20} from "@openzeppelin/contracts/token/ERC20/utils/SafeERC20.sol
 import {ReentrancyGuardTransient} from "@openzeppelin/contracts/utils/ReentrancyGuardTransient.sol";
 import {Token} from "./token/Token.sol";
 import {BondingCurve} from "./libraries/BondingCurve.sol";
-import {ILaunchpadFactory} from "./interfaces//launchpad/ILaunchpadFactory.sol";
 import {IERC20} from "@openzeppelin/contracts/token/ERC20/IERC20.sol";
 import {IUniswapV2Router02} from "./interfaces/uniswap/IUniswapV2Router02.sol";
 import {IUniswapV2Factory} from "./interfaces/uniswap/IUniswapV2Factory.sol";
@@ -16,15 +15,14 @@ import {IUniswapV2Factory} from "./interfaces/uniswap/IUniswapV2Factory.sol";
 contract LaunchpadFactory is
     Ownable(msg.sender),
     Pausable,
-    ReentrancyGuardTransient,
-    ILaunchpadFactory
+    ReentrancyGuardTransient
 {
     using Address for address;
     using SafeERC20 for IERC20;
     using Address for address payable;
 
     uint256 public constant TOTAL_SUPPLY = 1_000_000_000 ether;
-    uint256 public constant THRESHOLD = 100 ether;
+    uint256 public constant THRESHOLD = 20 ether;
 
     address public immutable uniswapV2Router;
 
@@ -34,17 +32,8 @@ contract LaunchpadFactory is
         uint256 ethSupply;
         bool isMigrated;
     }
-    struct TokenPrice {
-        address tokenAddress;
-        uint256 currentPrice;
-        uint256 ethSupply;
-        uint256 tokenSupply;
-        bool isMigrated;
-    }
 
     mapping(address => TokenData) public tokenData;
-    mapping(address => IERC20) public tokens;
-    address[] public allTokens;
 
     error LaunchpadFactoryInvalidRouter();
     error LaunchpadFactoryTokenDeploymentFailed();
@@ -81,9 +70,11 @@ contract LaunchpadFactory is
     }
 
     modifier validToken(address tokenAddress) {
-        if (tokenAddress == address(0)) revert LaunchpadFactoryInvalidAddress();
-        if (address(tokens[tokenAddress]) == address(0))
-            revert LaunchpadFactoryInvalidAddress();
+        if (
+            tokenData[tokenAddress].tokenSupply == 0 &&
+            tokenData[tokenAddress].ethSupply == 0 &&
+            !tokenData[tokenAddress].isMigrated
+        ) revert LaunchpadFactoryInvalidAddress();
         _;
     }
 
@@ -109,9 +100,6 @@ contract LaunchpadFactory is
             ethSupply: 0,
             isMigrated: false
         });
-
-        tokens[token] = IERC20(token);
-        allTokens.push(token);
 
         IERC20(token).approve(uniswapV2Router, tokensLiquidity);
 
@@ -159,7 +147,7 @@ contract LaunchpadFactory is
         data.ethSupply += ethAmount;
         data.tokenSupply -= amountOut;
 
-        tokens[tokenAddress].safeTransfer(msg.sender, amountOut);
+        IERC20(tokenAddress).safeTransfer(msg.sender, amountOut);
 
         emit TokenPurchase(tokenAddress, msg.sender, ethAmount, amountOut);
 
@@ -194,7 +182,7 @@ contract LaunchpadFactory is
         data.ethSupply -= ethReturn;
         data.tokenSupply += amountIn;
 
-        tokens[tokenAddress].safeTransferFrom(
+        IERC20(tokenAddress).safeTransferFrom(
             msg.sender,
             address(this),
             amountIn
@@ -204,46 +192,6 @@ contract LaunchpadFactory is
         emit TokenSale(tokenAddress, msg.sender, amountIn, ethReturn);
 
         return ethReturn;
-    }
-
-    function getAllTokenPrices()
-        external
-        view
-        returns (TokenPrice[] memory prices)
-    {
-        prices = new TokenPrice[](allTokens.length);
-
-        for (uint i = 0; i < allTokens.length; i++) {
-            address tokenAddr = allTokens[i];
-            TokenData storage data = tokenData[tokenAddr];
-
-            uint256 currentPrice;
-            if (data.isMigrated) {
-                currentPrice = 0;
-            } else if (data.ethSupply > 0) {
-                uint256 tokensFor1Eth = BondingCurve.calculatePurchaseReturn(
-                    data.ethSupply,
-                    1 ether
-                );
-                currentPrice = tokensFor1Eth > 0 ? 1 ether / tokensFor1Eth : 0;
-            } else {
-                uint256 tokensFor1Eth = BondingCurve.calculatePurchaseReturn(
-                    0,
-                    1 ether
-                );
-                currentPrice = tokensFor1Eth > 0 ? 1 ether / tokensFor1Eth : 0;
-            }
-
-            prices[i] = TokenPrice({
-                tokenAddress: tokenAddr,
-                currentPrice: currentPrice,
-                ethSupply: data.ethSupply,
-                tokenSupply: data.tokenSupply,
-                isMigrated: data.isMigrated
-            });
-        }
-
-        return prices;
     }
 
     function getTokenPrice(
@@ -288,10 +236,6 @@ contract LaunchpadFactory is
         );
     }
 
-    function allTokensLength() external view returns (uint256) {
-        return allTokens.length;
-    }
-
     function pause() external onlyOwner {
         _pause();
     }
@@ -321,7 +265,7 @@ contract LaunchpadFactory is
             data.ethSupply += contribution;
             data.tokenSupply -= amountOut;
 
-            tokens[tokenAddress].safeTransfer(msg.sender, amountOut);
+            IERC20(tokenAddress).safeTransfer(msg.sender, amountOut);
         }
 
         _migrateLiquidity(tokenAddress, THRESHOLD, data.tokensLiquidity);

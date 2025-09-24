@@ -33,7 +33,7 @@ contract LaunchpadFactoryFuzzTest is Test, ArtifactStorage {
     }
 
     function testFuzz_BuyTokensInvariant(uint256 ethAmount) public {
-        ethAmount = bound(ethAmount, 0.01 ether, 99 ether);
+        ethAmount = bound(ethAmount, 0.01 ether, 19 ether);
 
         (
             ,
@@ -76,7 +76,7 @@ contract LaunchpadFactoryFuzzTest is Test, ArtifactStorage {
         );
         sellAmount = bound(sellAmount, boughtTokens / 100, boughtTokens);
 
-        IERC20 token = launchpadFactory.tokens(tokenAddress);
+        IERC20 token = IERC20(tokenAddress);
         token.approve(address(launchpadFactory), sellAmount);
 
         (
@@ -119,13 +119,13 @@ contract LaunchpadFactoryFuzzTest is Test, ArtifactStorage {
     }
 
     function testFuzz_MigrationThreshold(uint256 ethAmount) public {
-        ethAmount = bound(ethAmount, 98 ether, 102 ether);
+        ethAmount = bound(ethAmount, 18 ether, 22 ether);
 
         launchpadFactory.buyTokens{value: ethAmount}(tokenAddress, 0);
 
         (, , , bool isMigrated) = launchpadFactory.tokenData(tokenAddress);
 
-        if (ethAmount >= 100 ether) {
+        if (ethAmount >= 20 ether) {
             assertTrue(isMigrated, "Should be migrated");
 
             address pair = IUniswapV2Factory(uniswapFactory).getPair(
@@ -142,7 +142,7 @@ contract LaunchpadFactoryFuzzTest is Test, ArtifactStorage {
     }
 
     function testFuzz_PriceConsistency(uint256 ethAmount) public {
-        ethAmount = bound(ethAmount, 0.01 ether, 50 ether);
+        ethAmount = bound(ethAmount, 0.01 ether, 10 ether);
 
         (, uint256 tokenSupply, , ) = launchpadFactory.tokenData(tokenAddress);
         uint256 expectedTokens = launchpadFactory.getTokensOutAtCurrentSupply(
@@ -168,7 +168,7 @@ contract LaunchpadFactoryFuzzTest is Test, ArtifactStorage {
         uint256 ethAmount,
         uint256 minTokens
     ) public {
-        ethAmount = bound(ethAmount, 0.01 ether, 50 ether);
+        ethAmount = bound(ethAmount, 0.01 ether, 10 ether);
 
         uint256 expectedTokens = launchpadFactory.getTokensOutAtCurrentSupply(
             tokenAddress,
